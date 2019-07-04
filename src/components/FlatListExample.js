@@ -1,8 +1,9 @@
 import React, { Component } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, FlatList, Image, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, Platform, FlatList, Image, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import axios from 'axios';
 
 //import data from '../../data';
+const isIos = Platform.OS === 'ios';
 
 export default class FlatListExample extends Component {
   state = {
@@ -10,7 +11,13 @@ export default class FlatListExample extends Component {
     page: 1,
     contacts: [],
     allContacts: [],
-    loading: true
+    loading: true,
+    refreshing: false
+  }
+
+  constructor(props) {
+    super(props);
+    this.duringMomentum = false;
   }
 
   componentDidMount() {
@@ -18,23 +25,41 @@ export default class FlatListExample extends Component {
   }
 
   getContacts = async () => {
-    console.log("getContacts");
-    console.log(this.state.page);
+    this.setState({
+      loading: true
+    });
+
     const { data: { results: contacts } } = await axios.get(`https://randomuser.me/api/?results=30&page=${this.state.page}`);
-    const users = [...this.state.contacts, ...contacts]
+    const users = [...this.state.contacts, ...contacts] //iki array'i birleştirdik
+
+    if (this.state.refreshing) {
+      users.reverse();
+    }
 
     this.setState({
       contacts: users,
       allContacts: users,
-      loading: false
+      loading: false,
+      refreshing: false
     });
 
   };
 
   loadMore = () => {
-    console.log("loadMore")
+    if (!this.duringMomentum) {
+      this.setState({
+        page: this.state.page + 1,
+      }, () => {
+        this.getContacts()
+      });
+      this.duringMomentum = false;
+    }
+  };
+
+  onRefresh = () => {
     this.setState({
-      page: this.state.page + 1,
+      page: 1,
+      refreshing: true
     }, () => {
       this.getContacts()
     });
@@ -71,6 +96,8 @@ export default class FlatListExample extends Component {
     return (
       <View style={styles.searchContainer}>
         <TextInput
+          onFocus={() => this.duringMomentum = true}
+          onBlur={() => this.duringMomentum = false}
           onChangeText={text => {
             this.setState({
               text,
@@ -89,7 +116,7 @@ export default class FlatListExample extends Component {
     if (!this.state.loading) return null;
 
     return (
-      <View>
+      <View style={{ paddingVertical: 20 }}>
         <ActivityIndicator size="large" />
       </View>
     )
@@ -104,7 +131,9 @@ export default class FlatListExample extends Component {
         keyExtractor={item => item.login.uuid}
         data={this.state.contacts}
         onEndReached={this.loadMore}
-        onEndReachedThreshold={1}
+        onEndReachedThreshold={isIos ? 0 : .2}
+        refreshing={this.state.refreshing}
+        onRefresh={this.onRefresh}
       />
     );
   }
